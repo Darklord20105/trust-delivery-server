@@ -4,6 +4,7 @@ const User = require('../../schema/usersSchema/usersSchema');
 const { v4: uuidv4 } = require('uuid');
 const jwt = require('jsonwebtoken');
 const authMiddleware = require('../../middleware/auth');
+const generateData = require("../../utils/generator")
 
 // Route 1: Create First Super Admin
 router.post('/create-superadmin', async (req, res) => {
@@ -87,7 +88,7 @@ router.post('/request-otp', async (req, res) => {
 
     res.json({ success: true, message: 'OTP sent' });
   } catch (error) {
-    res.status(500).json({ error: 'Server error' });
+    res.status(500).json({ error: 'Server error' + error });
   }
 });
 
@@ -118,14 +119,26 @@ router.post('/verify-otp', async (req, res) => {
     // Clear OTP
     user.auth.otp = null;
     user.auth.otpExpires = null;
+
+    // if we already have unique id, password, secret code, master key 
+    // then do nothing and only return the jsonwebtoken
+    if (!user.auth.uniqueId && !user.auth.password && !user.auth.secretCode && !user.auth.masterKey) {
+      // Generate User login details
+      const x = generateData()
+      user.auth.uniqueId = x.uniqueId;
+      user.auth.password = x.password;
+      user.auth.secretCode = x.secretCode;
+      user.auth.masterKey = x.masterKey;
+    }
+
     await user.save();
 
     // Generate JWT
     const token = jwt.sign({ id: user._id }, 'space', { expiresIn: '6h' });
 
-    res.json({ success: true, token, apiKey: user.apiKey });
+    return res.json({ success: true, token, apiKey: user.apiKey, auth: user.auth });
   } catch (error) {
-    res.status(500).json({ error: 'Server error' });
+    res.status(500).json({ error: 'Server error'+ error });
   }
 });
 
@@ -135,7 +148,7 @@ router.post('/signup', authMiddleware('users', 'write'), async (req, res) => {
   try {
     const { name, phone, email, role } = req.body;
 
-    if (!name || !phone || !email || !role ) {
+    if (!name || !phone || !email || !role) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
     if (!/^\+\d{10,15}$/.test(phone)) {
@@ -210,7 +223,7 @@ router.post('/signup', authMiddleware('users', 'write'), async (req, res) => {
     if (error.code === 11000) {
       return res.status(400).json({ error: 'Phone or email already exists' });
     }
-    res.status(500).json({ error: 'Server error'+ error });
+    res.status(500).json({ error: 'Server error' + error });
   }
 });
 
@@ -218,7 +231,9 @@ router.post('/signup', authMiddleware('users', 'write'), async (req, res) => {
 // when user is created auto generate 
 // unique id, password, secretcode, and master key 
 // for highest level of security
-
+router.get('/login', async (req, res) => {
+  return res.json("login here")
+})
 
 
 module.exports = router;
