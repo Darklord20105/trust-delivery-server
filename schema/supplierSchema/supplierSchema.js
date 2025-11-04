@@ -9,15 +9,21 @@ const supplierSchema = new mongoose.Schema({
   phone: {
     type: String,
     required: true,
+    unique: true,
     trim: true,
     match: /^\+\d{10,15}$/ // E.g., +1234567890
   },
   email: {
     type: String,
     required: true,
+    unique: true,
     trim: true,
     lowercase: true,
     match: /^[^\s@]+@[^\s@]+\.[^\s@]+$/ // Basic email validation
+  },
+  createdBy:{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
   },
   socialMedia: {
     instagram: {
@@ -36,17 +42,17 @@ const supplierSchema = new mongoose.Schema({
   address: {
     street: {
       type: String,
-      required: true,
+      // required: true,
       trim: true
     },
     city: {
       type: String,
-      required: true,
+      // required: true,
       trim: true
     },
     postalCode: {
       type: String,
-      required: true,
+      // required: true,
       trim: true
     },
     country: {
@@ -69,9 +75,9 @@ const supplierSchema = new mongoose.Schema({
 });
 
 // Indexes for performance
-supplierSchema.index({ phone: 1 });
-supplierSchema.index({ email: 1 });
-supplierSchema.index({ 'address.coordinates': '2dsphere' });
+// supplierSchema.index({ phone: 1 });
+// supplierSchema.index({ email: 1 });
+// supplierSchema.index({ 'address.coordinates': '2dsphere' });
 
 // Update timestamp on save
 supplierSchema.pre('save', function(next) {

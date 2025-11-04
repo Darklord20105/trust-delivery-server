@@ -1,5 +1,35 @@
 const crypto = require('crypto');
 
+function hashWithSCrypt(password, salt, fn) {
+  const keylen = 64; // Desired length of the derived key
+  crypto.scrypt(password, salt, keylen, (err, derivedKey) => {
+    if (err) {
+	console.error('Error hashing password:', err);
+        return;
+    }
+    // derivedKey is a Buffer containing the hashed password
+    const hashedPassword = derivedKey.toString('hex');
+    return fn(hashedPassword);
+  })
+};
+
+function compareHashedValues(storedHashedPassword, 
+    storedSalt, enteredPassword) {
+ return new Promise((resolve, reject) => {
+    const keylen = 64; // Desired length of the derived key
+    crypto.scrypt(enteredPassword, storedSalt, keylen, (err, derivedKey) => 
+{
+	if (err) {
+	  console.error('Error verifying password:', err);
+	  // Reject the promise on error
+	  reject(err);
+	  return;
+  	}
+	resolve(derivedKey.toString('hex') === storedHashedPassword);
+     });
+  })
+}
+
 function generateUniqueId() {
     const prefix = "P00";
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
@@ -67,12 +97,22 @@ const userData = {
 };
 
 function generateData() {
-    return {
-        uniqueId: generateUniqueId(),
-        password: generatePassword(),
-        secretCode: generateSecretCode(),
-        masterKey: generateMasterKey(),
-    }
+  return new Promise((resolve) => {
+
+    let userData = {
+      uniqueId: generateUniqueId(),
+      password: generatePassword(),
+      secretCode: generateSecretCode(),
+      masterKey: generateMasterKey()                                            };
+  
+    console.log(userData.password, 'pass without hash')
+    hashWithSCrypt(userData.password, userData.secretCode, (pass) => {
+      userData.password = pass;
+    
+      resolve(userData);
+    });
+
+  });
 }
 
 // console.log("Generated User Data:");
@@ -81,4 +121,4 @@ function generateData() {
 // console.log(`Secret Code: ${userData.secretCode}`);
 // console.log(`Master Key: ${userData.masterKey}`);
 
-module.exports = generateData;
+module.exports = { generateData, hashWithSCrypt, compareHashedValues };

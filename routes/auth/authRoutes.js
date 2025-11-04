@@ -1,10 +1,15 @@
 const express = require('express');
 const router = express.Router();
 const User = require('../../schema/usersSchema/usersSchema');
+const Supplier = require('../../schema/supplierSchema/supplierSchema');
 const { v4: uuidv4 } = require('uuid');
 const jwt = require('jsonwebtoken');
 const authMiddleware = require('../../middleware/auth');
-const generateData = require("../../utils/generator")
+const {
+  generateData,
+  compareHashedValues
+} = require("../../utils/generator");
+//const hashWithSCrypt = require("../../utils/generator");
 
 // Route 1: Create First Super Admin
 router.post('/create-superadmin', async (req, res) => {
@@ -124,11 +129,14 @@ router.post('/verify-otp', async (req, res) => {
     // then do nothing and only return the jsonwebtoken
     if (!user.auth.uniqueId && !user.auth.password && !user.auth.secretCode && !user.auth.masterKey) {
       // Generate User login details
-      const x = generateData()
-      user.auth.uniqueId = x.uniqueId;
-      user.auth.password = x.password;
-      user.auth.secretCode = x.secretCode;
-      user.auth.masterKey = x.masterKey;
+      const d = await generateData();
+
+      user.auth.uniqueId = d.uniqueId;
+      user.auth.secretCode = d.secretCode;
+      user.auth.masterKey = d.masterKey;
+      user.auth.password = d.password;
+
+      user.markModified('auth');
     }
 
     await user.save();
@@ -136,13 +144,16 @@ router.post('/verify-otp', async (req, res) => {
     // Generate JWT
     const token = jwt.sign({ id: user._id }, 'space', { expiresIn: '6h' });
 
-    return res.json({ success: true, token, apiKey: user.apiKey, auth: user.auth });
+    return res.json({
+      success: true, token, apiKey: user.apiKey, auth: user.auth
+    });
   } catch (error) {
-    res.status(500).json({ error: 'Server error'+ error });
+    res.status(500).json({ error: 'Server error' + error });
   }
 });
 
 // Route 4: Signup (Super Admin only Creates Users)
+// when creating new user instance 
 
 router.post('/signup', authMiddleware('users', 'write'), async (req, res) => {
   try {
@@ -161,10 +172,6 @@ router.post('/signup', authMiddleware('users', 'write'), async (req, res) => {
       return res.status(400).json({ error: 'Invalid role' });
     }
 
-    /*if (['supplierAdmin', 'supplierModerator'].includes(role) && !supplierId) {
-      return res.status(400).json({ error: 'supplierId required for supplierAdmin or supplierModerator' });
-    }*/
-
     let permissions = [];
     if (role === 'superAdmin') {
       permissions = [
@@ -178,7 +185,16 @@ router.post('/signup', authMiddleware('users', 'write'), async (req, res) => {
         { resource: 'sms', actions: ['read', 'write'] },
         { resource: 'logistics', actions: ['read', 'write'] }
       ];
-    } else if (role === 'supplierAdmin') {
+    } else if (role === 'admin') {
+      permissions = [
+        { resource: 'users', actions: ['read', 'updatePermissions'] },
+        { resource: 'suppliers', actions: ['read'] },
+        { resource: 'customers', actions: ['read'] },
+        { resource: 'orders', actions: ['read', 'assign', 'flag'] },
+        { resource: 'analytics', actions: ['read'] }
+      ];
+    }
+    else if (role === 'supplierAdmin') {
       permissions = [
         { resource: 'suppliers', actions: ['read', 'write'] },
         { resource: 'customers', actions: ['read', 'write', 'delete'] },
@@ -190,14 +206,6 @@ router.post('/signup', authMiddleware('users', 'write'), async (req, res) => {
         { resource: 'suppliers', actions: ['read'] },
         { resource: 'customers', actions: ['read'] },
         { resource: 'orders', actions: ['read', 'flag'] },
-        { resource: 'analytics', actions: ['read'] }
-      ];
-    } else if (role === 'admin') {
-      permissions = [
-        { resource: 'users', actions: ['read', 'updatePermissions'] },
-        { resource: 'suppliers', actions: ['read'] },
-        { resource: 'customers', actions: ['read'] },
-        { resource: 'orders', actions: ['read', 'assign', 'flag'] },
         { resource: 'analytics', actions: ['read'] }
       ];
     } else if (role === 'driver') {
@@ -212,15 +220,16 @@ router.post('/signup', authMiddleware('users', 'write'), async (req, res) => {
       phone,
       email,
       role,
-      //supplierId: ['supplierAdmin', 'supplierModerator'].includes(role) ? supplierId : undefined,
       apiKey: uuidv4(),
       permissions,
     });
 
     await user.save();
+
     res.json({ success: true, userId: user._id, apiKey: user.apiKey });
   } catch (error) {
     if (error.code === 11000) {
+      console.log(error)
       return res.status(400).json({ error: 'Phone or email already exists' });
     }
     res.status(500).json({ error: 'Server error' + error });
@@ -231,9 +240,44 @@ router.post('/signup', authMiddleware('users', 'write'), async (req, res) => {
 // when user is created auto generate 
 // unique id, password, secretcode, and master key 
 // for highest level of security
-router.get('/login', async (req, res) => {
-  return res.json("login here")
+router.post('/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ error: 'Invalid email format' });
+    }
+    if (!password) {
+      return res.status(400).json({ error: 'invalid password' });
+    }
+
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    console.log('from db', user.auth.password);
+    console.log('from request', password);
+
+    const isMatch = await compareHashedValues(user.auth.password, user.auth.secretCode, password);
+    console.log(isMatch, 'compare function');
+
+    if (!isMatch) {
+      console.log('Password does not match for user:', email);
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    const token = jwt.sign({ id: user._id }, 'space', { expiresIn: '6h' });
+    return res.json({ success: true, token, apiKey: user.apiKey });
+
+  } catch (error) {
+    res.status(500).json({ error: 'Server error' + error });
+  }
 })
 
+router.get('/list', async (req, res) => {
+  const list = await User.find({});
+  res.json({ list: list });
+});
 
 module.exports = router;

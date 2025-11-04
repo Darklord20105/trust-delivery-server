@@ -16,9 +16,9 @@ const authMiddleware = (resource, action) => async (req, res, next) => {
     if (user.apiKey !== apiKey) {
       return res.status(401).json({ error: 'Invalid API key' });
     }
-    if (user.role === 'supplierAdmin' && !user.kyc.verified) {
+    /*if (user.role === 'supplierAdmin' && !user.kyc.verified) {
       return res.status(403).json({ error: 'KYC not verified' });
-    }
+    }*/
     if (user.role === 'superAdmin') {
       req.user = decoded;
       return next();
@@ -28,9 +28,10 @@ const authMiddleware = (resource, action) => async (req, res, next) => {
       return res.status(403).json({ error: 'Unauthorized' });
     }
     req.user = decoded;
+    req.user.role = user.role;
     next();
   } catch (error) {
-    res.status(401).json({ error: 'Authentication failed' });
+    res.status(401).json({ error: 'Authentication failed '+ error });
   }
 };
 

@@ -4,7 +4,7 @@ const userSchema = new mongoose.Schema({
   name: {
     type: String,
     required: true,
-    trim: true
+    trim: true,
   },
   phone: {
     type: String,
@@ -27,12 +27,6 @@ const userSchema = new mongoose.Schema({
     enum: ['supplierAdmin', 'supplierModerator', 'admin', 'superAdmin', 'driver'],
     default: 'supplierAdmin'
   },
-  /*
-  supplierId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Supplier',
-    required: function() { return ['supplierAdmin', 'supplierModerator'].includes(this.role); }
-  },*/
   apiKey: {
     type: String,
     required: true,
@@ -71,7 +65,8 @@ const userSchema = new mongoose.Schema({
   auth: {
     otp: { type: String }, // Store hashed OTP
     otpExpires: { type: Date },
-    uniqueId: { type: String, unique: true },  
+    uniqueId: { type: String },  
+    // uniqueId: { type: String, unique: true },  
     // unique start with P000 then 5 numbers acquired from _id
     password: {type: String},
     secretCode: { type: String }, 
